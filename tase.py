@@ -60,9 +60,9 @@ def fetch_stock_details(self):
 
 
 def load_stored_stock_df_from_csv():
-    debug_print(func_name="load_stored_stock_df_from_csv", state="Start")
+    # debug_print(func_name="load_stored_stock_df_from_csv", state="Start")
     stocks_df = get_stocks_df_from_csv("stocks_df.csv")
-    debug_print(func_name="load_stored_stock_df_from_csv", state="Done")
+    # debug_print(func_name="load_stored_stock_df_from_csv", state="Done")
     return
 
 
@@ -85,7 +85,7 @@ def fetch_ticker(globes_id):
 
 # --- Main ---
 def build_master_stock_df():
-    debug_print(func_name="build_master_stock_df", state="Start")
+    # debug_print(func_name="build_master_stock_df", state="Start")
     # Build Hebrew and English stock df
     tlv_stocks_heb = get_stocks_df_from_tase(HEB_TASE_STOCKS_URL, prefix_name="heb")
     tlv_stocks_heb = tlv_stocks_heb.iloc[:, :3]
@@ -108,9 +108,7 @@ def build_master_stock_df():
                                 left_index=False, right_index=False, sort=True, suffixes=('', ''), copy=True,
                                 indicator=False, validate=None)
     stocks_lookup_df.set_index('ticker')
-    print('Done - build_master_stock_df()')
-
-    debug_print(func_name="build_master_stock_df", state="Done")
+    # debug_print(func_name="build_master_stock_df", state="Done")
     return stocks_lookup_df
 
 
@@ -153,7 +151,7 @@ def get_all_todays_intraday_to_files(stocks_df, dir_path):
     :return:
     """
     import os
-    debug_print(func_name="get_all_todays_intraday_to_files", state="Start")
+    # debug_print(func_name="get_all_todays_intraday_to_files", state="Start")
     today_str = str(datetime.now().date())
     for i, row in stocks_df.iterrows():
         intra_day = fetch_intraday_data(row['number'], row['ticker'])
@@ -164,7 +162,7 @@ def get_all_todays_intraday_to_files(stocks_df, dir_path):
             append_intraday_to_csv(intra_day, stock_filename=path)
         else:
             print("Failed fetching " + row['ticker'])
-    debug_print(func_name="get_all_todays_intraday_to_files", state="Done")
+    # debug_print(func_name="get_all_todays_intraday_to_files", state="Done")
     return
 
 
@@ -199,7 +197,7 @@ def append_intraday_to_csv(intra_day, stock_filename, temp_filename='temp'):
 
 # Not used
 def get_xls_intraday_data(globes_id):
-    debug_print(func_name="get_xls_intraday_data", state="Start")
+    # debug_print(func_name="get_xls_intraday_data", state="Start")
     print("get_xls_intraday_data for instrument " + globes_id)
     xlsurl = "https://www.globes.co.il/portal/instrument/instrumentgraph_toexcel.aspx?instrumentid=" + globes_id + "&feeder=0"
     res = requests.get(xlsurl)
@@ -210,7 +208,7 @@ def get_xls_intraday_data(globes_id):
     data.info()
     # TODO: Change headers and convert to DataFrame
 
-    debug_print(func_name="get_xls_intraday_data", state="Done")
+    # debug_print(func_name="get_xls_intraday_data", state="Done")
 
 
 # intra_day = fetch_intraday_data('373019', 'AURA')
