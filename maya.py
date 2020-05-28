@@ -115,7 +115,7 @@ def get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2
                     continue
 
                 res_dict = json.loads(response.text)
-                if res_dict['Reports'].__len__() == 0:
+                if len(res_dict['Reports']) == 0:   # Check if this len() thing works correctly
                     print("Response contains no reports - page {0}, msg_count {1}".format(page,msg_counter))
                     strike += 1
                     if strike > max_strikes:

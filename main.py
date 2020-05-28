@@ -14,6 +14,8 @@ def get_triggers():
 
 # Main
 #---DEBUG----
+# tase.get_historical_data(start_date=datetime(2020,4,1),end_date=datetime(2020,5,27))
+# print("done")
 # dir_path = "/Users/assafdekel/other_projects/maya/temp"
 #tase.sort_all_stock_files_in_dir(dir_path)
 # tase.rename_files_in_dir(dir_path)

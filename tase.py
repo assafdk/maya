@@ -1,12 +1,15 @@
 from bs4 import BeautifulSoup
 import requests
 import pandas as pd
-from datetime import datetime
-import time
-import matplotlib.pyplot
+from datetime import datetime, timedelta
 
 # Check URLs !!!
 # Declare TASE stock DB URLs
+HEB_TASE_HISTORICAL_DATA_URL = "https://info.tase.co.il/_layouts/Tase/ManagementPages/Export.aspx?sn=none&action=1&SubAction=2&date={0}&GridId=94&CurGuid={{D3BCD81A-8C9F-4D16-848A-FF76429D70E7}}&ExportType=3"
+HEB_TASE_HISTORICAL_EXTENDED_STOCKS_DATA_URL = "https://info.tase.co.il/_layouts/Tase/ManagementPages/Export.aspx?sn=none&GridId=33&AddCol=1&Lang=he-IL&CurGuid={{26F9CCE6-D184-43C6-BAB9-CF7848987BFF}}&action=1&dualTab=&SubAction=2&date={0}&ExportType=3"
+ENG_TASE_HISTORICAL_EXTENDED_STOCKS_DATA_URL = "https://info.tase.co.il/_layouts/Tase/ManagementPages/Export.aspx?sn=none&GridId=33&AddCol=1&Lang=en-US&CurGuid={85603D39-703A-4619-97D9-CE9F16E27615}&action=1&dualTab=&SubAction=1&date={0}&ExportType=3"
+
+
 HEB_TASE_STOCKS_URL = "https://info.tase.co.il/_layouts/15/Tase/ManagementPages/Export.aspx?sn=none&action=1&SubAction=0&GridId=33&CurGuid=%7B26F9CCE6-D184-43C6-BAB9-CF7848987BFF%7D&ExportType=3"
 ENG_TASE_STOCKS_URL = "https://info.tase.co.il/_layouts/15/Tase/ManagementPages/Export.aspx?sn=none&action=1&SubAction=0&GridId=33&CurGuid=%7B85603D39-703A-4619-97D9-CE9F16E27615%7D&ExportType=3"
 
@@ -21,11 +24,22 @@ def __init__(self, maya_msg_url):
 
 
 def get_stocks_df_from_tase(url, prefix_name=""):
-    response = requests.get(url)
+    i = 0
+    max_tries = 5
+    while (i<max_tries):
+        try:
+            response = requests.get(url)
+            break
+        except:
+            i = i+1
+            print("get_stocks_df_from_tase network Error. Strike " + str(i) + " out of " + str(max_tries))
+    if len(response.content) == 0:
+        return None
     dateTimeObj = str(datetime.now())
-    filename = prefix_name + "tase_stocks_" + dateTimeObj + ".csv"
+    filename = prefix_name + "tase_stocks.csv"
     file = open(filename, "w")
     file.write(response.text)
+    file.close()
     df = pd.read_csv(filename, skiprows=3)
     return df
 
@@ -83,7 +97,7 @@ def fetch_ticker(globes_id):
     ticker = soup.find('div', class_="enName secName").get_text()
     return ticker
 
-# --- Main ---
+# --- Main functions ---
 def build_master_stock_df():
     # debug_print(func_name="build_master_stock_df", state="Start")
     # Build Hebrew and English stock df
@@ -159,7 +173,7 @@ def get_all_todays_intraday_to_files(stocks_df, dir_path):
             #filename = row['ticker'] + "_" + row['number'] + "_" + today_str + ".csv"
             filename = row['ticker'] + "_" + row['number'] + ".csv"
             path = os.path.join(dir_path, filename)
-            append_intraday_to_csv(intra_day, stock_filename=path)
+            append_response_data_to_csv(intra_day, stock_filename=path)
         else:
             print("Failed fetching " + row['ticker'])
     # debug_print(func_name="get_all_todays_intraday_to_files", state="Done")
@@ -167,14 +181,14 @@ def get_all_todays_intraday_to_files(stocks_df, dir_path):
 
 
 # USED
-def append_intraday_to_csv(intra_day, stock_filename, temp_filename='temp'):
+def append_response_data_to_csv(response, stock_filename, temp_filename='temp'):
     """
-    Sorts and appends today's data to stock's csv
+    Sorts and appends HTTP response market data to stock's csv
     """
 
-    # Write today's intraday data to a temporary file
+    # Write data to a temporary file
     temp_file = open(temp_filename, 'wb')
-    temp_file.write(intra_day.content)
+    temp_file.write(response.content)
     temp_file.close()
 
     # Append today's sorted data to stock's file
@@ -185,15 +199,39 @@ def append_intraday_to_csv(intra_day, stock_filename, temp_filename='temp'):
     return
 
 
-# dff = pd.read_csv(filename, skiprows=2)
-#
-#
-# intra_day = fetch_intraday_data(stocks_df['number'][0], stocks_df['ticker'][0])
-# outfile = open(filename,'wb')
-# outfile.write(intra_day.content)
-# outfile.close()
-# dff = pd.read_csv(filename,skiprows=2)
+def get_historical_data(start_date,end_date):
+    # debug_print(func_name="build_master_stock_df", state="Start")
+    debug_print(func_name="get_historical_data", state="Start")
+    str_dbg_print("Start getting historical date from " + start_date.strftime("%Y-%m-%d") + " to " + end_date.strftime("%Y-%m-%d"))
+    date = end_date
+    history_filename =  start_date.strftime("%Y-%m-%d") + "_to_" + end_date.strftime("%Y-%m-%d") + "_EOD_data.csv"
+    temp_filename_prefix = "historical_heb_"
 
+    while (date >= start_date):
+        # Convert date to .net format
+        dotnet_date = utc_to_dotnet(date)
+        url = HEB_TASE_HISTORICAL_EXTENDED_STOCKS_DATA_URL.format(dotnet_date)
+
+        # Save date's table to a dataframe
+        # daily_stocks_heb_df
+        df = get_stocks_df_from_tase(url, prefix_name=temp_filename_prefix)
+        if df is None:
+            # Get next date...
+            date -= timedelta(days=1)
+            continue
+        df = df.drop(df.index[-1])
+
+        # Append df to history file
+        df['תאריך'] = date
+        if date == end_date:
+            df.to_csv(history_filename, mode='a', header=True, index=False)
+        else:
+            df.to_csv(history_filename, mode='a', header=False, index=False)
+
+        # Get next date...
+        date -= timedelta(days=1)
+    debug_print(func_name="get_historical_data", state="Done")
+    return
 
 # Not used
 def get_xls_intraday_data(globes_id):
@@ -270,6 +308,10 @@ def debug_print(func_name, state):
     print(state + " " + func_name + " :" + str(datetime.now()))
 
 
+def str_dbg_print(str_to_print):
+    print(str(datetime.now()) + ": " + str_to_print)
+
+
 def sort_all_stock_files_in_dir(dir_path):
     import os
     directory = os.fsencode(dir_path)
@@ -286,6 +328,37 @@ def sort_file(filename):
     df = pd.read_csv(filename, skiprows=2)
     df = df.sort_values(by='Date')
     df.to_csv(filename, mode='w', header=True, index=False)
+
+def posix_to_utc(posix_timestamp):
+    posix_epoch = datetime(1970, 1, 1)
+    utc_time = posix_epoch + timedelta(seconds=posix_timestamp)
+    return utc_time
+
+def dotnet_to_utc(dotnet_timestamp):
+    dotnet_epoch = datetime(1, 1, 1)
+    utc_time = dotnet_epoch + timedelta(microseconds=dotnet_timestamp // 10)
+    return utc_time
+
+def utc_to_dotnet(utc_time):
+    dotnet_epoch = datetime(1, 1, 1)
+    dotnet_timestamp = 10 * (utc_time - dotnet_epoch) // timedelta(microseconds=1)
+    return dotnet_timestamp
+
+def utc_to_posix(utc_time):
+    posix_epoch = datetime(1970, 1, 1)
+    posix_timestamp = (utc_time - posix_epoch) // timedelta(seconds=1)
+    return posix_timestamp
+
+
+
+def to_timestamp(timestamp):
+    timestamp = float(timestamp[0])
+    seconds_since_epoch = timestamp/10**7
+    loc_dt = datetime.fromtimestamp(seconds_since_epoch)
+    loc_dt -= timedelta(days=(1970 - 1601) * 365 + 89)
+    return loc_dt
+
+
 
 
 # def rename_files_in_dir(dir_path):
