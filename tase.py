@@ -44,10 +44,6 @@ def get_stocks_df_from_tase(url, prefix_name=""):
     return df
 
 
-def get_stocks_df_from_csv(csv_file):
-    return pd.read_csv(csv_file)
-
-
 def fetch_tickers_one_by_one(stocks_df):
     # in: globes instrument id
     # out: stock ticker from Globes stock webpage
@@ -61,21 +57,9 @@ def fetch_tickers_one_by_one(stocks_df):
     return tickers_list
 
 
-def fetch_maya_msgs(self):
-    # TODO: read RSS
-    return
-
-
-def fetch_stock_details(self):
-    # TODO: get ticker...
-    html_file = requests.get(self.msg_url)
-    soup = BeautifulSoup(self.msg_url, 'html.parser')
-    return
-
-
 def load_stored_stock_df_from_csv():
     # debug_print(func_name="load_stored_stock_df_from_csv", state="Start")
-    stocks_df = get_stocks_df_from_csv("stocks_df.csv")
+    stocks_df = pd.read_csv("stocks_df.csv")
     # debug_print(func_name="load_stored_stock_df_from_csv", state="Done")
     return
 
@@ -87,17 +71,7 @@ def find_ISIN(heb_number, df):
     return 'None'
 
 
-# Not Used
-def fetch_ticker(globes_id):
-    # in: globes instrument id
-    # out: stock ticker from Globes stock webpage
-    url = GLOBES_STOCK_URL_FORMAT.format(globes_id)
-    page = requests.get(url)
-    soup = BeautifulSoup(page.text, 'html.parser')
-    ticker = soup.find('div', class_="enName secName").get_text()
-    return ticker
-
-# --- Main functions ---
+# --------- Main functions ---------
 def build_master_stock_df():
     # debug_print(func_name="build_master_stock_df", state="Start")
     # Build Hebrew and English stock df
@@ -233,76 +207,8 @@ def get_historical_data(start_date,end_date):
     debug_print(func_name="get_historical_data", state="Done")
     return
 
-# Not used
-def get_xls_intraday_data(globes_id):
-    # debug_print(func_name="get_xls_intraday_data", state="Start")
-    print("get_xls_intraday_data for instrument " + globes_id)
-    xlsurl = "https://www.globes.co.il/portal/instrument/instrumentgraph_toexcel.aspx?instrumentid=" + globes_id + "&feeder=0"
-    res = requests.get(xlsurl)
-    out = open('test1.xls', 'wb')
-    out.write(res.content)
-    out.close()
-    data = pd.read_html('test1.xls', skiprows=1)
-    data.info()
-    # TODO: Change headers and convert to DataFrame
 
-    # debug_print(func_name="get_xls_intraday_data", state="Done")
-
-
-# intra_day = fetch_intraday_data('373019', 'AURA')
-# print(intra_day.text)
-
-#
-# import requests
-# from bs4 import BeautifulSoup
-#
-#
-# # Collect and parse first page
-# page = requests.get('http://maya.tase.co.il/reports/details/1293201')
-# soup = BeautifulSoup(page.text, 'html.parser')
-#
-# # Pull all text from the BodyText div
-# artist_name_list = soup.find(class_='BodyText')
-#
-# # Pull text from all instances of <a> tag within BodyText div
-# artist_name_list_items = artist_name_list.find_all('a')
-
-
-# Not used
-# def build_stock_df_from_web():
-#     stocks_list = fetch_tase_stocks_list()
-#     stocks_dict  =  {'Heb Name' : stocks_list[0], 'Stock Num' : stocks_list[1], 'Globes ID' : stocks_list[2]}
-#     stocks_df = pd.DataFrame(stocks_dict)
-#     #tickers = stocks_df['Globes ID'].apply(fetch_ticker)   # doesn't work
-#     tickers_list = fetch_tickers_one_by_one(stocks_df)
-#     stocks_df['Ticker'] = tickers_list
-#     stocks_df.to_csv("stocks_df.csv", index=False, header=True)
-#
-#     return stocks_df
-
-# Not used
-def fetch_tase_stocks_list():
-    url = GLOBES_ALL_STOCKS_URL
-    page = requests.get(url)
-    soup = BeautifulSoup(page.text, 'html.parser')
-
-    stock_heb_names_list = []
-    stock_number_list = []
-    stock_globes_instrument_id_list = []
-    trs = soup.find_all('tr')
-    trs = trs[2:]
-    for tr in trs:
-        stock_name = tr.find_all('td')[1].a.get_text()
-        # stock_name = tr.find_all('td')[1].get_text()
-        stock_number = tr.find_all('td')[2].get_text()
-        stock_globes_instrument_id = tr.find_all('td')[1].a.get('href').split('=')[1]
-        stock_heb_names_list.append(stock_name)
-        stock_number_list.append(stock_number)
-        stock_globes_instrument_id_list.append(stock_globes_instrument_id)
-    return [stock_heb_names_list, stock_number_list, stock_globes_instrument_id_list]
-
-
-# ---- AUX ----
+# ------------ AUX ------------
 
 def debug_print(func_name, state):
     print(state + " " + func_name + " :" + str(datetime.now()))
@@ -350,15 +256,12 @@ def utc_to_posix(utc_time):
     return posix_timestamp
 
 
-
 def to_timestamp(timestamp):
     timestamp = float(timestamp[0])
     seconds_since_epoch = timestamp/10**7
     loc_dt = datetime.fromtimestamp(seconds_since_epoch)
     loc_dt -= timedelta(days=(1970 - 1601) * 365 + 89)
     return loc_dt
-
-
 
 
 # def rename_files_in_dir(dir_path):
@@ -374,3 +277,62 @@ def to_timestamp(timestamp):
 #             os.rename(old_path, new_path)
 
 
+# ------------------ Not Used ------------------
+def fetch_ticker(globes_id):
+    # in: globes instrument id
+    # out: stock ticker from Globes stock webpage
+    url = GLOBES_STOCK_URL_FORMAT.format(globes_id)
+    page = requests.get(url)
+    soup = BeautifulSoup(page.text, 'html.parser')
+    ticker = soup.find('div', class_="enName secName").get_text()
+    return ticker
+
+
+# Not used
+def get_xls_intraday_data(globes_id):
+    # debug_print(func_name="get_xls_intraday_data", state="Start")
+    print("get_xls_intraday_data for instrument " + globes_id)
+    xlsurl = "https://www.globes.co.il/portal/instrument/instrumentgraph_toexcel.aspx?instrumentid=" + globes_id + "&feeder=0"
+    res = requests.get(xlsurl)
+    out = open('test1.xls', 'wb')
+    out.write(res.content)
+    out.close()
+    data = pd.read_html('test1.xls', skiprows=1)
+    data.info()
+    # TODO: Change headers and convert to DataFrame
+
+    # debug_print(func_name="get_xls_intraday_data", state="Done")
+
+
+# Not used
+# def build_stock_df_from_web():
+#     stocks_list = fetch_tase_stocks_list()
+#     stocks_dict  =  {'Heb Name' : stocks_list[0], 'Stock Num' : stocks_list[1], 'Globes ID' : stocks_list[2]}
+#     stocks_df = pd.DataFrame(stocks_dict)
+#     #tickers = stocks_df['Globes ID'].apply(fetch_ticker)   # doesn't work
+#     tickers_list = fetch_tickers_one_by_one(stocks_df)
+#     stocks_df['Ticker'] = tickers_list
+#     stocks_df.to_csv("stocks_df.csv", index=False, header=True)
+#
+#     return stocks_df
+
+# Not used
+def fetch_tase_stocks_list():
+    url = GLOBES_ALL_STOCKS_URL
+    page = requests.get(url)
+    soup = BeautifulSoup(page.text, 'html.parser')
+
+    stock_heb_names_list = []
+    stock_number_list = []
+    stock_globes_instrument_id_list = []
+    trs = soup.find_all('tr')
+    trs = trs[2:]
+    for tr in trs:
+        stock_name = tr.find_all('td')[1].a.get_text()
+        # stock_name = tr.find_all('td')[1].get_text()
+        stock_number = tr.find_all('td')[2].get_text()
+        stock_globes_instrument_id = tr.find_all('td')[1].a.get('href').split('=')[1]
+        stock_heb_names_list.append(stock_name)
+        stock_number_list.append(stock_number)
+        stock_globes_instrument_id_list.append(stock_globes_instrument_id)
+    return [stock_heb_names_list, stock_number_list, stock_globes_instrument_id_list]

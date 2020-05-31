@@ -5,22 +5,16 @@ import maya
 import tase
 
 
-def get_triggers():
-    # TODO: Define trigger
-    ticker = False
-    ticker = maya.check_trigger()
-    return ticker
+# ---DEBUG----
 
-
-# Main
-#---DEBUG----
 # tase.get_historical_data(start_date=datetime(2020,4,1),end_date=datetime(2020,5,27))
 # print("done")
 # dir_path = "/Users/assafdekel/other_projects/maya/temp"
 #tase.sort_all_stock_files_in_dir(dir_path)
 # tase.rename_files_in_dir(dir_path)
-#------------
+# ------------
 
+# ------------------ Main ------------------
 # Build TASE stocks lookup table
 stocks_df = tase.build_master_stock_df()
 # Get & append new intra_day data
@@ -33,7 +27,7 @@ maya_msgs = maya.create_msgs_dataframe(stocks_df)
 maya_msgs = maya.analyze(maya_msgs)
 
 while (1):
-    triggers = get_triggers()
+    triggers = None
     if triggers:
         #open_position(triggered_ticker)
         # Returns a datetime object containing the local date and time

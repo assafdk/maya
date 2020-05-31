@@ -5,11 +5,6 @@ from datetime import datetime
 MAYA_URL = "https://maya.tase.co.il/rss/maya.xml"
 
 
-# def __init__(self, stocks_df = None, rssurl = MAYA_URL):
-#     self.feedurl = rssurl
-#     self.stocks_df = stocks_df
-
-
 def create_msgs_dataframe(stocks_df, feedurl = MAYA_URL):
     # Parse Maya RSS feed
     thefeed = feedparser.parse(feedurl)
@@ -138,13 +133,3 @@ def get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2
         print("I/O error")
 
     print("Done get_historical_bulletin_msgs() :" + str(datetime.now()))
-
-def check_trigger():
-    msgs_df = create_msgs_dataframe(MAYA_URL)
-
-
-# Maya Main
-
-# get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2000-11-23T21:00:00.000Z")
-#
-# print("Maya - Done")
