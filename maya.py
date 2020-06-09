@@ -6,6 +6,11 @@ MAYA_URL = "https://maya.tase.co.il/rss/maya.xml"
 MSG_SCORE_THRESHOLD = 5    # if msg score is above this then buy stock
 MSG_MAX_DELAY = dt.timedelta(days=3,hours=0,minutes=5,seconds=0)    # Max delay allowed (from msg to now) for msgs to be relevant
 
+# def __init__(self, stocks_df = None, rssurl = MAYA_URL):
+#     self.feedurl = rssurl
+#     self.stocks_df = stocks_df
+
+
 def create_msgs_dataframe(stocks_df, feedurl = MAYA_URL):
     # Parse Maya RSS feed
     thefeed = feedparser.parse(feedurl)
@@ -151,9 +156,6 @@ def get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2
     except IOError:
         print("I/O error")
 
-<<<<<<< HEAD
-    print("Done get_historical_bulletin_msgs() :" + str(datetime.now()))
-=======
     print("Done get_historical_bulletin_msgs() :" + str(dt.datetime.now()))
 
 
@@ -162,4 +164,3 @@ def get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2
 # get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2000-11-23T21:00:00.000Z")
 #
 # print("Maya - Done")
->>>>>>> 881346485972974d90113919a93ec34d1567ff8c

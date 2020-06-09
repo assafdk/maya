@@ -1,28 +1,17 @@
 import datetime as dt
 import maya
 import tase
-<<<<<<< HEAD
-
-
-# ---DEBUG----
-=======
 import time
->>>>>>> 881346485972974d90113919a93ec34d1567ff8c
 
+
+# Main
+#---DEBUG----
 # tase.get_historical_data(start_date=datetime(2020,4,1),end_date=datetime(2020,5,27))
 # print("DEBUG")
 # dir_path = "/Users/assafdekel/other_projects/maya/temp"
 #tase.sort_all_stock_files_in_dir(dir_path)
 # tase.rename_files_in_dir(dir_path)
-<<<<<<< HEAD
-# ------------
 
-# ------------------ Main ------------------
-# Build TASE stocks lookup table
-stocks_df = tase.build_master_stock_df()
-=======
-
->>>>>>> 881346485972974d90113919a93ec34d1567ff8c
 # Get & append new intra_day data
 # intraday_dir_path l= '/Users/assafdekel/other_projects/maya/intraday'
 # tase.get_all_todays_intraday_to_files(stocks_df,dir_path=intraday_dir_path)
@@ -58,19 +47,6 @@ while(True):
 # ------------------------------
 
 
-<<<<<<< HEAD
-while (1):
-    triggers = None
-    if triggers:
-        #open_position(triggered_ticker)
-        # Returns a datetime object containing the local date and time
-        dateTimeObj = datetime.now()
-        print("Position opened at " + dateTimeObj)
-        #track_stock_and_close_position()
-        dateTimeObj = datetime.now()
-        print("Position closed at " + dateTimeObj)
-=======
->>>>>>> 881346485972974d90113919a93ec34d1567ff8c
 
 
 # while (1):

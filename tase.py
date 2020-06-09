@@ -196,7 +196,7 @@ def get_historical_data(start_date,end_date):
         df = df.drop(df.index[-1])
 
         # Append df to history file
-        df['תאריך'] = date
+        df['date'] = date
         if date == end_date:
             df.to_csv(history_filename, mode='a', header=True, index=False)
         else:
