@@ -1,9 +1,10 @@
 import pandas as pd
 import feedparser
-from datetime import datetime
+import datetime as dt
 
 MAYA_URL = "https://maya.tase.co.il/rss/maya.xml"
-
+MSG_SCORE_THRESHOLD = 5    # if msg score is above this then buy stock
+MSG_MAX_DELAY = dt.timedelta(days=3,hours=0,minutes=5,seconds=0)    # Max delay allowed (from msg to now) for msgs to be relevant
 
 # def __init__(self, stocks_df = None, rssurl = MAYA_URL):
 #     self.feedurl = rssurl
@@ -26,9 +27,15 @@ def create_msgs_dataframe(stocks_df, feedurl = MAYA_URL):
     # Extract stock name for each message and add english ticker
     maya_msgs_df['heb_name'] = maya_msgs_df['title'].apply(get_stock_name)
     maya_msgs_df = add_tickers(maya_msgs_df, stocks_df)
+    maya_msgs_df['time'] = pd.to_datetime(maya_msgs_df['time'])
     return maya_msgs_df
 
-def analyze(msgs_df):
+def analyze_msgs(msgs_df):
+    import numpy as np
+    msgs_df['score'] = 0
+    # for now - give random score for every message
+    msgs_df['score'] = np.random.randint(-1000, 1000, msgs_df.shape[0]) / 100
+
     # TODO: Analyze sentiment
     # sentiment = []
     # magnitude = []
@@ -36,7 +43,19 @@ def analyze(msgs_df):
     #     (sent,mag) =  get_google_sentiment(msg['title'])
     #     sentiment.append(sent)
     #     magnitude.append(mag)
-    return
+    return msgs_df
+
+
+def filter_relevant_msgs(maya_msgs_df):
+    # Some of these might move to "restrictions"
+    # TODO: add more filters: Volume? other indicators (RSI? over-bought?) Volatility? Sudden high price increase?
+    # TODO: think about ticker reputation - aggregate our history and experince with this ticker
+    # TODO: price too high? (can't buy Google for 2,500$)
+    # TODO: too many positions in the same industry?
+    # TODO: What time is it? Market almost closed? Do we want to buy late in the day?
+    filtered = maya_msgs_df[maya_msgs_df['score'] > MSG_SCORE_THRESHOLD]
+    filtered = filtered[dt.datetime.now()-filtered['time'] < MSG_MAX_DELAY]
+    return filtered
 
 
 # AUX - internal
@@ -55,7 +74,7 @@ def add_tickers(msgs_df, stocks_df):
 def get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2020-05-24T21:00:00.000Z"):
 
     import requests, json, csv, time
-    print("Start get_historical_bulletin_msgs() :" + str(datetime.now()))
+    print("Start get_historical_bulletin_msgs() :" + str(dt.datetime.now()))
     headers = {
         'Connection': 'keep-alive',
         'Accept': 'application/json, text/plain, */*',
@@ -137,10 +156,7 @@ def get_historical_bulletin_msgs(from_date="1999-12-31T22:00:00.000Z",to_date="2
     except IOError:
         print("I/O error")
 
-    print("Done get_historical_bulletin_msgs() :" + str(datetime.now()))
-
-def check_trigger():
-    msgs_df = create_msgs_dataframe(MAYA_URL)
+    print("Done get_historical_bulletin_msgs() :" + str(dt.datetime.now()))
 
 
 # Maya Main
