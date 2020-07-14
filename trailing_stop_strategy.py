@@ -1,6 +1,5 @@
 import datetime as dt
 import time
-import IB_API as ib
 import pandas as pd
 import random as rand
 import math
@@ -15,18 +14,20 @@ TWS_IP_ADDR = "127.0.0.1"
 TWS_PORT = 7497     # 7497 - paper account
 TWS_CLIENT_ID = 0
 
-MAX_PORTFOLIO_VALUE = 10000         # Max Utotal value of positions - Don't invest more then this
-DEFAULT_POSITION_VALUE = ALLOCATION_PERCENT * TOTAL_TRADING_FUNDS  # 10% * 10,000$ = 1,000$
+ALLOCATION_PERCENT = 0.1            # How much stocks to buy - 10% of total portfolio
+MAX_TRADING_FUNDS = 10000         # Total value of positions - Don't invest more then this
+DEFAULT_POSITION_VALUE = ALLOCATION_PERCENT * MAX_TRADING_FUNDS  # 10% * 10,000$ = 1,000$
 FIRST_TRADING_TIME = dt.time(11,00) # Don't buy before this hour
 LAST_TRADING_TIME = dt.time(15,00)  # Don't after before this hour
 
 
 # =================== Functions ===================
 def get_stock_price(ticker):
-    if None == ticker:
+    if ticker is None:
         return None
     last_price = tickers_df[tickers_df['ticker'] == ticker]['last_price'].iloc[0]
     return last_price
+
 
 def get_ticker_id(ticker):
     if None == ticker:
@@ -34,9 +35,11 @@ def get_ticker_id(ticker):
     ticker_id = tickers_df[tickers_df['ticker'] == ticker].index[0]
     return ticker_id
 
+
 def update_price(ticker_index, price_type, price):
     global tickers_df
     tickers_df.iloc[ticker_index,tickers_df.columns.get_loc(price_type)] = price
+
 
 # --- Trading strategy functions ---
 # Random triggers for now
@@ -51,7 +54,7 @@ def get_triggers_df(stocks_df):
 def strategy_restrictions(ticker):
     if ib.position_exists(ticker):                              # if position exists don't buy more
         return True
-    if ib.open_positions_total_value() >= MAX_PORTFOLIO_VALUE:  # Max funds invested - don't invest more
+    if ib.open_positions_total_value() >= MAX_TRADING_FUNDS:    # Max funds invested - don't invest more
         return True
     if dt.datetime.now().time() < FIRST_TRADING_TIME:           # Too early in the day - don't buy yet
         return True
@@ -91,6 +94,7 @@ def create_nasdaq_contract(ticker):
     contract.primaryExchange = "NASDAQ"
     return contract
 
+
 # Callback overrides
 class IB_App(EWrapper,EClient):
     def __init__(self):
@@ -100,11 +104,9 @@ class IB_App(EWrapper,EClient):
     def error(self,reqId, errorCode, errorString):
         print("Error: ", reqId, " ", errorCode, " ", errorString)
 
-
     # EWrapper callback
     def nextValidId(self, orderId):
         self.nextOrderId = orderId
-
 
     """ <summary>
     #/ A Market order is an order to buy or sell at the market bid or offer price. A market order may increase the likelihood of a fill 
@@ -171,6 +173,27 @@ class IB_App(EWrapper,EClient):
     # ! [ticksize]
     # --------------------------------------------------
 
+    # --- Assaf - IB Shortcuts ---
+    def send_order(self, ticker, order_action, quantity, sec_type="STK", order_type="MKT", limit_price=None):
+        contract = Contract()  # Creates a contract object from the import
+        contract.symbol = ticker  # Sets the ticker symbol
+        contract.secType = sec_type  # Defines the security type as stock
+        contract.currency = "USD"  # Currency is US dollars
+        # In the API side, NASDAQ is always defined as ISLAND in the exchange field
+        contract.exchange = "SMART"
+        # contract.PrimaryExch = "NYSE"
+        contract.PrimaryExch = "NASDAQ"
+
+        order = Order()
+        order.action = order_action
+        order.orderType = order_type
+        order.totalQuantity = quantity
+        order.lmtPrice = limit_price
+
+        self.placeOrder(self.nextOrderId, contract, order)
+        return self.nextOrderId
+    # ----------------------------
+
 # --------------------------------------------------------------------
 
 # ====================== init ======================
@@ -180,7 +203,7 @@ tickers_dict = {'ticker':tickers_list, 'last_price':nan_list, 'bid':nan_list, 'a
 tickers_df = pd.DataFrame(tickers_dict)
 
 # IB App:
-ib_app = ib.IB_App()
+ib_app = IB_App()
 ib_app.connect(TWS_IP_ADDR, TWS_PORT, TWS_CLIENT_ID)
 
 ib_app.reqMarketDataType(4)  # switch to delayed-frozen if live isn't available
@@ -206,11 +229,11 @@ while(True):
             ticker_id = get_ticker_id(ticker=ticker)
             # get last price
             last_price = get_stock_price(ticker=ticker)                 # FB stock price = ~240
-            quantity = math.floor(DEFAULT_POSITION_VALUE/last_price)    # 1,000/240 = 4 stocks
-
+            quantity = math.floor(DEFAULT_POSITION_VALUE/last_price)    # 1,000$/240$ = 4 stocks
 
             # buy stock
-            position_id = ib_app.send_order(ticker=ticker, order_action="BUY", quantity=quantity, sec_type="STK", order_type="MKT")
+            order_id = ib_app.send_order(ticker=ticker, order_action="BUY", quantity=quantity, sec_type="STK", order_type="MKT")
+            # TODO: send order?
             # set trailing stop & take profit
             ib_app.TrailingStop(action="SELL", quantity=position, trailingPercent=2)
             ib.set_stop_loss(position_id)
