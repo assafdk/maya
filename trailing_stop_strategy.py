@@ -4,24 +4,31 @@ import pandas as pd
 import random as rand
 import math
 import numpy as np
+from threading import Thread, Lock
+
+# from multiprocessing import Process, Lock
 
 # Global variables
-tickers_list = ['AAPL','TSLA','CL','JETS','FB','INTL','BA','T']     # tickers to trade on
+tickers_list = ['AAPL', 'TSLA', 'CL', 'JETS', 'FB', 'INTC', 'BA', 'T']  # tickers to trade on
 trigger_flag = False
 SLEEP_SECONDS = 30
 # POSITION_MAX_TIME = dt.timedelta(minutes=120)
 TWS_IP_ADDR = "127.0.0.1"
-TWS_PORT = 7497     # 7497 - paper account
+TWS_PORT = 7497  # 7497 - paper account
 TWS_CLIENT_ID = 0
 
-ALLOCATION_PERCENT = 0.1            # How much stocks to buy - 10% of total portfolio
-MAX_TRADING_FUNDS = 10000         # Total value of positions - Don't invest more then this
+ALLOCATION_PERCENT = 0.1  # How much stocks to buy - 10% of total portfolio
+MAX_TRADING_FUNDS = 10000  # Total value of positions - Don't invest more then this
 DEFAULT_POSITION_VALUE = ALLOCATION_PERCENT * MAX_TRADING_FUNDS  # 10% * 10,000$ = 1,000$
-FIRST_TRADING_TIME = dt.time(11,00) # Don't buy before this hour
-LAST_TRADING_TIME = dt.time(15,00)  # Don't after before this hour
+FIRST_TRADING_TIME = dt.time(11, 00)  # Don't buy before this hour
+LAST_TRADING_TIME = dt.time(15, 00)  # Don't after before this hour
 
 
 # =================== Functions ===================
+def run_ib_app(app):
+    app.run()
+
+
 def get_stock_price(ticker):
     if ticker is None:
         return None
@@ -30,7 +37,7 @@ def get_stock_price(ticker):
 
 
 def get_ticker_id(ticker):
-    if None == ticker:
+    if ticker is None:
         return None
     ticker_id = tickers_df[tickers_df['ticker'] == ticker].index[0]
     return ticker_id
@@ -38,27 +45,33 @@ def get_ticker_id(ticker):
 
 def update_price(ticker_index, price_type, price):
     global tickers_df
-    tickers_df.iloc[ticker_index,tickers_df.columns.get_loc(price_type)] = price
+    tickers_df.iloc[ticker_index, tickers_df.columns.get_loc(price_type)] = price
 
 
 # --- Trading strategy functions ---
 # Random triggers for now
 def get_triggers_df(stocks_df):
-    #TODO: create SMA20 triggers
-    rnd = rand.randint(0, 10*stocks_df.__len__())
-    if rnd>=stocks_df.__len__():
+    # TODO: create SMA20 triggers
+    # rnd = rand.randint(0, 10 * stocks_df.__len__())
+    rnd = rand.randint(0, 1 * stocks_df.__len__())
+    if rnd >= stocks_df.__len__():
         return None
-    return stocks_df.iloc[rnd]
+
+    # debug
+    trigger_flag = True
+    return stocks_df.iloc[[rnd]]
 
 
 def strategy_restrictions(ticker):
-    if ib.position_exists(ticker):                              # if position exists don't buy more
+    # debug
+    return False
+    if ib.position_exists(ticker):  # if position exists don't buy more
         return True
-    if ib.open_positions_total_value() >= MAX_TRADING_FUNDS:    # Max funds invested - don't invest more
+    if ib.open_positions_total_value() >= MAX_TRADING_FUNDS:  # Max funds invested - don't invest more
         return True
-    if dt.datetime.now().time() < FIRST_TRADING_TIME:           # Too early in the day - don't buy yet
+    if dt.datetime.now().time() < FIRST_TRADING_TIME:  # Too early in the day - don't buy yet
         return True
-    if dt.datetime.now().time() > LAST_TRADING_TIME:            # Too late in the day - don't buy anymore today
+    if dt.datetime.now().time() > LAST_TRADING_TIME:  # Too late in the day - don't buy anymore today
         return True
     # TODO: price too high? (can't buy Google for 2,500$)
     # TODO: add more filters: Volume? other indicators (RSI? over-bought?) Volatility? Sudden high price increase?
@@ -69,7 +82,7 @@ def strategy_restrictions(ticker):
 
 
 def time_to_close(position):
-    if dt.datetime.now()-position.time > POSITION_MAX_TIME:
+    if dt.datetime.now() - position.time > POSITION_MAX_TIME:
         return True
     return False
 
@@ -96,12 +109,12 @@ def create_nasdaq_contract(ticker):
 
 
 # Callback overrides
-class IB_App(EWrapper,EClient):
+class IB_App(EWrapper, EClient):
     def __init__(self):
-        EClient.__init__(self,self)
+        EClient.__init__(self, self)
 
     # EWrapper callback
-    def error(self,reqId, errorCode, errorString):
+    def error(self, reqId, errorCode, errorString):
         print("Error: ", reqId, " ", errorCode, " ", errorString)
 
     # EWrapper callback
@@ -114,6 +127,7 @@ class IB_App(EWrapper,EClient):
     #/ lower/higher than the current displayed bid/ask.
     #/ Products: BOND, CFD, EFP, CASH, FUND, FUT, FOP, OPT, STK, WAR
     </summary>"""
+
     @staticmethod
     def MarketOrder(action: str, quantity: float):
         # ! [market]
@@ -124,7 +138,6 @@ class IB_App(EWrapper,EClient):
         # ! [market]
         return order
 
-
     """ <summary>
     #/ A sell trailing stop order sets the stop price at a fixed amount below the market price with an attached "trailing" amount. As the 
     #/ market price rises, the stop price rises by the trail amount, but if the stock price falls, the stop loss price doesn't change, 
@@ -133,6 +146,7 @@ class IB_App(EWrapper,EClient):
     #/ trailing stop orders, and are most appropriate for use in falling markets.
     #/ Products: CFD, CASH, FOP, FUT, OPT, STK, WAR
     </summary>"""
+
     @staticmethod
     def TrailingStop(action: str, quantity: float, trailingPercent: float,
                      trailStopPrice: float):
@@ -165,16 +179,18 @@ class IB_App(EWrapper,EClient):
             print("PreOpen:", attrib.preOpen)
         else:
             print()
+
     # ! [tickprice]
 
     # ! [ticksize]
     def tickSize(self, reqId, tickType, size):
         print("TickSize. TickerId:", reqId, "TickType:", TickTypeEnum.to_str(tickType), "Size:", size)
+
     # ! [ticksize]
     # --------------------------------------------------
 
     # --- Assaf - IB Shortcuts ---
-    def send_order(self, ticker, order_action, quantity, sec_type="STK", order_type="MKT", limit_price=None):
+    def send_order(self, ticker, order_action, quantity, sec_type="STK", order_type="MKT", limit_price=None,trail_percent=None, trail_stop_price=None):
         contract = Contract()  # Creates a contract object from the import
         contract.symbol = ticker  # Sets the ticker symbol
         contract.secType = sec_type  # Defines the security type as stock
@@ -188,68 +204,83 @@ class IB_App(EWrapper,EClient):
         order.action = order_action
         order.orderType = order_type
         order.totalQuantity = quantity
-        order.lmtPrice = limit_price
+
+        if order_type=='TRAIL':
+            if trail_percent is not None:
+                order.trailingPercent = trail_percent
+            if trail_stop_price is not None:
+                order.trailStopPrice = trail_stop_price
+
+        if order_type == 'LMT':
+            if limit_price is not None:
+                order.lmtPrice = limit_price
 
         self.placeOrder(self.nextOrderId, contract, order)
         return self.nextOrderId
     # ----------------------------
+
 
 # --------------------------------------------------------------------
 
 # ====================== init ======================
 # tickers to trade:
 nan_list = [np.nan] * len(tickers_list)
-tickers_dict = {'ticker':tickers_list, 'last_price':nan_list, 'bid':nan_list, 'ask':nan_list, 'type':'STK'}
+tickers_dict = {'ticker': tickers_list, 'last_price': nan_list, 'bid': nan_list, 'ask': nan_list, 'type': 'STK'}
 tickers_df = pd.DataFrame(tickers_dict)
+triggers_df = pd.DataFrame()
 
 # IB App:
 ib_app = IB_App()
 ib_app.connect(TWS_IP_ADDR, TWS_PORT, TWS_CLIENT_ID)
+time.sleep(3)
+# TODO: check connection
+ib_thread = Thread(target=run_ib_app, args=(ib_app,))
+ib_thread.start()
 
 ib_app.reqMarketDataType(4)  # switch to delayed-frozen if live isn't available
-for tickerId, row in tickers_df.iterrows(): # request stream data for tracked stocks
+for tickerId, row in tickers_df.iterrows():  # request stream data for tracked stocks
     contract = create_nasdaq_contract(row['ticker'])
-    ib_app.reqMktData(tickerId, contract, "", False, False)
-
-ib_app.run()
+    ib_app.reqMktData(tickerId, contract, "", False, False, [])
 
 # ====================== Main ======================
-while(True):
+#debug
+trigger_flag = True;
+
+while True:
     if trigger_flag:
-        trigger_flag = False
-        triggers_df = get_triggers_df(tickers_df)        # retrieve new tickers to buy
-    if triggers_df.count()['ticker'] > 0:               # if there are relevant messages:
-        for ticker in triggers_df['ticker'].unique():   # (buy position for each ticker)
-            if strategy_restrictions(ticker):
-                # strategy restrictions prevent buying this ticker
-                # clear_trigger(ticker)
-                continue
+        # trigger_flag = False
+        triggers_df = get_triggers_df(tickers_df)  # retrieve new tickers to buy
+        if (triggers_df is not None) and (triggers_df.count()['ticker'] > 0):  # if there are relevant messages:
+            for ticker in triggers_df.ticker.unique():
+                # skip restricted tickers
+                if strategy_restrictions(ticker):
+                    # strategy restrictions prevent buying this ticker
+                    # clear_trigger(ticker)
+                    continue
 
-            # id = a unique number from df to track this ticker's callbacks
-            ticker_id = get_ticker_id(ticker=ticker)
-            # get last price
-            last_price = get_stock_price(ticker=ticker)                 # FB stock price = ~240
-            quantity = math.floor(DEFAULT_POSITION_VALUE/last_price)    # 1,000$/240$ = 4 stocks
+                # id = a unique number from df to track this ticker's callbacks
+                ticker_id = get_ticker_id(ticker=ticker)
+                # get last price
+                last_price = get_stock_price(ticker=ticker)  # FB stock price = ~240
+                quantity = math.floor(DEFAULT_POSITION_VALUE / last_price)  # 1,000$/240$ = 4 stocks
 
-            # buy stock
-            order_id = ib_app.send_order(ticker=ticker, order_action="BUY", quantity=quantity, sec_type="STK", order_type="MKT")
-            # TODO: send order?
-            # set trailing stop & take profit
-            ib_app.TrailingStop(action="SELL", quantity=position, trailingPercent=2)
-            ib.set_stop_loss(position_id)
-            ib.set_take_profit(position_id)
-            ib.send_order()
+                # buy stock @ Market price
+                order_id = ib_app.send_order(order_action="BUY", order_type="MKT", quantity=quantity, sec_type="STK", ticker=ticker)
+                # TODO: verify order execution in Callback function
+                ib_app.reqIds(numIds=1)
+                # set trailing stop & take profit
+                order_id = ib_app.send_order(order_action="SELL", order_type="TRAIL", trail_percent=2 ,quantity=quantity, sec_type="STK", ticker=ticker)
+                # TODO: verify order execution in Callback function
 
-            # subtract money invested from total allowed / update open positions / update executed orders
-            # TODO: Move this to execution callback
-            invested_funds -= quantity*exec_price
-            # restrictions = update_restrictions(quantity*exec_price)
+                # subtract money invested from total allowed / update open positions / update executed orders
+                # TODO: Move this to execution callback
+                invested_funds -= quantity * exec_price
+                # restrictions = update_restrictions(quantity*exec_price)
 
-    for position in ib.get_open_positions():                # for each open position:
-        if time_to_close(position):
-            ib.close_position(position.id)
+    # for position in ib.get_open_positions():  # for each open position:
+    #     if time_to_close(position):
+    #         ib.close_position(position.id)
 
-    time.sleep(SLEEP_SECONDS)
+    # time.sleep(SLEEP_SECONDS)
 
 # ------------------------------------------------------------------
-
