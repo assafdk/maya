@@ -9,6 +9,8 @@ from threading import Thread, Lock
 # from multiprocessing import Process, Lock
 
 # Global variables
+DEBUG = True
+
 IB_ACCOUNT_NUMBER = "DU2185370"
 TWS_IP_ADDR = "127.0.0.1"
 TWS_PORT = 7497  # 7497 - paper account
@@ -16,7 +18,10 @@ TWS_CLIENT_ID = 0
 
 tickers_list = ['AAPL', 'TSLA', 'CL', 'JETS', 'FB', 'INTC', 'BA', 'T']  # tickers to trade on
 trigger_flag = False
-TRIGGER_TIME_WINDOW = dt.timedelta(minutes=5)
+if DEBUG:
+    TRIGGER_TIME_WINDOW = dt.timedelta(days=3)
+else:
+    TRIGGER_TIME_WINDOW = dt.timedelta(minutes=5)
 SLEEP_SECONDS = 30
 POSITION_MAX_TIME = dt.timedelta(days=365)
 
@@ -28,22 +33,28 @@ FIRST_TRADING_TIME = dt.time(11, 00)  # Don't buy before this hour
 LAST_TRADING_TIME = dt.time(15, 00)  # Don't after before this hour
 
 
+class Funds:
+     def __init__(self):
+         self.ILS = 0
+         self.USD = 0
+         self.EUR = 0
+
 # =================== Functions ===================
 def run_ib_app(app):
     app.run()
 
 
-# Check if the API is connected via orderid. Assumes orderid was set to None before connect
-def wait_for_connection():
-    global ib_app
-    time.sleep(3)
-    while True:
-        if isinstance(ib_app.nextOrderId, int):
-            print('connected')
-            break
-        else:
-            print('waiting for connection')
-            time.sleep(1)
+# # Check if the API is connected via orderid. Assumes orderid was set to None before connect
+# def wait_for_connection():
+#     global ib_app
+#     time.sleep(3)
+#     while True:
+#         if isinstance(ib_app.nextOrderId, int):
+#             print('connected')
+#             break
+#         else:
+#             print('waiting for connection')
+#             time.sleep(1)
 
 
 def get_stock_price(ticker):
@@ -51,6 +62,10 @@ def get_stock_price(ticker):
         return None
     last_price = tickers_df[tickers_df['ticker'] == ticker]['last_price'].iloc[0]
     return last_price
+
+
+def dbg_get_stock_price(ticker):
+    return 1000
 
 
 def get_ticker_id(ticker):
@@ -193,19 +208,20 @@ class IB_App(EWrapper, EClient):
     # EWrapper callback
     def updateAccountValue(self, key: str, val: str, currency: str,
                            accountName: str):
-        global available_funds_ILS
-        global available_funds_USD
-        global available_funds_EUR
+        global available_funds
+
         super().updateAccountValue(key, val, currency, accountName)
+        print("UpdateAccountValue. Key:", key, "Value:", val,
+              "Currency:", currency, "AccountName:", accountName)
         if key == "AvailableFunds":
             if currency == "ILS":
-                available_funds_ILS = val
+                available_funds.ILS = val
             if currency == "USD":
-                available_funds_USD = val
+                available_funds.USD = val
             if currency == "EUR":
-                available_funds_EUR = val
-            print("UpdateAccountValue. Key:", key, "Value:", val,
-                  "Currency:", currency, "AccountName:", accountName)
+                available_funds.EUR = val
+            # print("UpdateAccountValue. Key:", key, "Value:", val,
+            #       "Currency:", currency, "AccountName:", accountName)
         return
 
     def updatePortfolio(self, contract: Contract, position: float,
@@ -304,12 +320,45 @@ class IB_App(EWrapper, EClient):
         historical_data_df = historical_data_df.append(dict, ignore_index=True)
         print("HistoricalData. ReqId:", reqId, "BarData.", bar)
 
+    # def historicalData(self, reqId, bar):
+    #     global historical_data_dict
+    #     symbol = tickers_df.loc[reqId, 'ticker']
+    #     dict = {'Symbol': symbol, 'time': dt.datetime.strptime(bar.date, "%Y%m%d %H:%M:%S"), 'Open': bar.open,
+    #             'High': bar.high, 'Low': bar.low,
+    #             'Close': bar.close, 'Volume': bar.volume, 'Average': bar.average}
+    #     historical_data_dict[symbol] = historical_data_dict[symbol].append(dict, ignore_index=True)
+    #     print("HistoricalData. ReqId:", reqId, "BarData.", bar)
+
+    # def historicalDataEnd(self, reqId: int, start: str, end: str):
+    #     super().historicalDataEnd(reqId, start, end)
+    #     global historical_data_dict
+    #     symbol = tickers_df.loc[reqId, 'ticker']
+    #     # historical_data_dict[symbol]['Symbol'].replace(reqId, symbol, inplace=True)
+    #     print("HistoricalDataEnd. ReqId:", reqId, "from", start, "to", end)
+    #
+    # def historicalDataUpdate(self, reqId, bar):
+    #     global historical_data_dict
+    #     symbol = tickers_df.loc[reqId, 'ticker']
+    #     dict = {'Symbol': symbol, 'time': dt.datetime.strptime(bar.date, "%Y%m%d %H:%M:%S"), 'Open': bar.open,
+    #             'High': bar.high, 'Low': bar.low,
+    #             'Close': bar.close, 'Volume': bar.volume, 'Average': bar.average}
+    #     # all_cols = ['ReqId', 'time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Average', 'SMA9', 'SMA20', 'SMA50', 'SMA200']
+    #     cols = ['Symbol', 'time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Average']
+    #     df = historical_data_dict[symbol][cols] # get ticker's df from dict
+    #     df = df.append(dict, ignore_index=True)
+    #     # df = calc_SMAs(df) - Calc only in triggers functions
+    #     historical_data_dict[symbol] = df
+    #     print("HistoricalDataUpdate. ReqId:", reqId, "BarData.", bar)
+
+
     def historicalDataEnd(self, reqId: int, start: str, end: str):
         super().historicalDataEnd(reqId, start, end)
         global historical_data_df
+        global last_historical_reqId
         symbol = tickers_df.loc[reqId, 'ticker']
         historical_data_df['Symbol'].replace(reqId, symbol, inplace=True)
         print("HistoricalDataEnd. ReqId:", reqId, "from", start, "to", end)
+        last_historical_reqId = reqId
 
     def historicalDataUpdate(self, reqId, bar):
         global historical_data_df
@@ -354,42 +403,13 @@ def calc_SMAs(df):
     df.dropna(inplace=True)
     return df
 
-
 # Random triggers for now
-def get_triggers_df(stock_historical_df, trig_df):
-    # TODO: create SMA20 triggers
-    # TODO: buy when FAST crosses up the SLOW
-    # TODO: sell when FAST crosses down the MID
-    # TODO: add Handled - True/False to triggers list
-
-    stock_historical_df = calc_SMAs(stock_historical_df)
-    sma9_sma50 = stock_historical_df['SMA9'] - stock_historical_df['SMA50']
-    up_crossing_indx = np.where(np.diff(np.sign(sma9_sma50)))
-    last_trigger = stock_historical_df.iloc[up_crossing_indx[0]].iloc[-1]
-    trigger_in_timeframe = last_trigger.time > dt.datetime.now() - TRIGGER_TIME_WINDOW
-
-    # check if trigger is too old
-    if not trigger_in_timeframe:
-        buy_trigger = False
-        return trig_df
-
-    if trig_df.empty:
-        # no prev triggers - add this new trigger
-        buy_trigger = True
-    else:
-        # if trigger already exists (Symbol & time) - don't add
-        if (trig_df['Symbol'] == last_trigger['Symbol']) & (trig_df['time'] == last_trigger.time):
-            buy_trigger = False
-            return trig_df
-        else:
-            # trigger is not in the list
-            buy_trigger2 = True
-
-    if buy_trigger:
-        dict = {'Symbol':stock_historical_df['Symbol'], 'time': last_trigger['time'], 'signal_type': 'SMA9xSMA50', 'handled': False}
-        trig_df = trig_df.append(dict, ignore_index=True)
-        return trig_df
-
+def dbg_get_triggers_df(stock_historical_df, trig_df):
+    # ---- debug ----
+    dict = {'Symbol': 'T', 'time': dt.datetime.now(), 'signal_type': 'SMA9xSMA50', 'handled': False}
+    trig_df = trig_df.append(dict, ignore_index=True)
+    return trig_df
+    # ---------------
     # debug
     # rnd = rand.randint(0, 10 * stocks_df.__len__())
     # rnd = rand.randint(0, 1 * stocks_df.__len__())
@@ -399,6 +419,37 @@ def get_triggers_df(stock_historical_df, trig_df):
     # # debug
     # trigger_flag = True
     # return stocks_df.iloc[[rnd]]
+
+def get_new_triggers(stock_historical_df, trig_df):
+    # buy signal when FAST crosses up the SLOW
+    # TODO: sell when FAST crosses down the MID
+    symbol = stock_historical_df['Symbol'].unique()[0]
+
+    # if trigger already exists for this Symbol - skip
+    if trig_df.Symbol.isin([symbol]).any():
+        return trig_df
+
+    stock_historical_df = calc_SMAs(stock_historical_df)
+    # check where fast SMA up-crosses slower SMA --> up trend
+    fast_SMA = stock_historical_df['SMA9']
+    slow_SMA = stock_historical_df['SMA50']
+    up_crossing_indx = np.where(np.diff(np.sign(fast_SMA-slow_SMA)))
+    # get most recent signal
+    last_trigger = stock_historical_df.iloc[up_crossing_indx[0]].iloc[-1]
+
+    # check if trigger is too old
+    if isinstance(last_trigger.time, str):
+        last_trigger_dt = dt.datetime.strptime(last_trigger.time, "%Y-%m-%d %H:%M:%S")
+    else:
+        last_trigger_dt = last_trigger.time
+    trigger_in_timeframe = last_trigger_dt > (dt.datetime.now() - TRIGGER_TIME_WINDOW)
+    if not trigger_in_timeframe:
+        return trig_df
+
+    # at this point this is a valid trigger
+    dict = {'Symbol':symbol, 'time': last_trigger_dt, 'signal_type': 'SMA9xSMA50', 'handled': False}
+    trig_df = trig_df.append(dict, ignore_index=True)
+    return trig_df
 
 
 def is_restricted(ticker, quantity):
@@ -430,26 +481,46 @@ def time_to_close(position):
     return False
 
 
+def get_tracked_tickers(filename):
+    try:
+        tickers_df = pd.read_csv(filename)
+    except:
+        nan_list = [np.nan] * len(tickers_list)
+        tickers_dict = {'ticker': tickers_list, 'last_price': nan_list, 'bid': nan_list, 'ask': nan_list, 'type': 'STK'}
+        tickers_df = pd.DataFrame(tickers_dict)
+    return tickers_df
+
+
+def get_last_triggers(filename):
+    try:
+        triggers_df = pd.read_csv(filename)
+    except:
+        trig_cols = ['Symbol','time','signal_type','handled']
+        triggers_df = pd.DataFrame(columns=trig_cols)
+    return triggers_df
+
+
+def get_available_funds():
+    global available_funds
+    available_funds.ILS = 0
+    available_funds.USD = 0
+    available_funds.EUR = 0
+    # get current funds available
+    ib_app.reqAccountUpdates(True, IB_ACCOUNT_NUMBER)
+    # wait for available cash data to return from TWS
+    while not (available_funds.ILS or available_funds.USD or available_funds.USD):
+        time.sleep(1)
+    return
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# ==================================================
 # ====================== init ======================
-# tickers to trade:
-nan_list = [np.nan] * len(tickers_list)
-tickers_dict = {'ticker': tickers_list, 'last_price': nan_list, 'bid': nan_list, 'ask': nan_list, 'type': 'STK'}
-tickers_df = pd.DataFrame(tickers_dict)
-try:
-    triggers_df = pd.read_csv('triggers_stocks.csv')
-except:
-    trig_cols = ['Symbol','time','signal_type','handled']
-    triggers_df = pd.DataFrame(columns=trig_cols)
-
-# init available cash
-available_funds_ILS = 0
-available_funds_USD = 0
-available_funds_EUR = 0
-
-#  set historical data df to track stocks history and moving average
-historical_columns = ['Symbol', 'time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Average']
-historical_data_df = pd.DataFrame(columns=historical_columns)
+# ==================================================
+print("Begin - Init")
+# set the tickers to trade:
+tickers_df = get_tracked_tickers('tracked_tickers_stocks.csv')
+triggers_df = get_last_triggers('triggers_stocks.csv')
 
 # start IB App:
 ib_app = IB_App()
@@ -457,65 +528,111 @@ ib_app.connect(TWS_IP_ADDR, TWS_PORT, TWS_CLIENT_ID)
 ib_thread = Thread(target=run_ib_app, args=(ib_app,))
 ib_app.nextOrderId = None
 ib_thread.start()
-wait_for_connection()
+# wait_for_connection()
+# ------ wait for connection ------
+# TODO: fix connection miss issue
+time.sleep(3)
+while True:
+    if isinstance(ib_app.nextOrderId, int):
+        print('connected')
+        break
+    else:
+        print('waiting for connection')
+        time.sleep(1)
 
-# get market data for tracked stocks
 # TODO: get live market data subscription https://www.interactivebrokers.com/en/index.php?f=4945&p=tradingpermissions
+# get market data for tracked stocks
+# set historical data df to track stocks history and moving average
+historical_columns = ['Symbol', 'time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Average']
+historical_data_df = pd.DataFrame(columns=historical_columns)
+# historical_data_dict = {}
+# for sym in tickers_list:
+#     exec("historical_data_dict['{0}'] = pd.DataFrame(columns=historical_columns)".format(sym))
+
 ib_app.reqMarketDataType(4)  # switch to delayed-frozen if live isn't available
-for tickerId, row in tickers_df.iterrows():  # request stream data for tracked stocks
-    contract = ib_app.create_nasdaq_contract(row['ticker'])
-    # ib_app.reqMktData(tickerId, contract, "", False, False, [])
-    # ib_app.reqHistoricalData(ib_app.nextOrderId, contract, endDateTime="",
-    #                          durationStr="10 D", barSizeSetting="1 min", whatToShow="TRADES", useRTH=1,
-    #                          formatDate=1, keepUpToDate=True, chartOptions=[])
-    ib_app.reqHistoricalData(tickerId, contract, endDateTime="",
-                             durationStr="1 D", barSizeSetting="1 min", whatToShow="TRADES", useRTH=1,
-                             formatDate=1, keepUpToDate=True, chartOptions=[])
+if DEBUG:
+    historical_data_df = pd.read_csv('historical_data.csv', index_col=False)
+else:
+    last_historical_reqId = -1
+    for tickerId, row in tickers_df.iterrows():  # request stream data for tracked stocks
+        contract = ib_app.create_nasdaq_contract(row['ticker'])
+        # ib_app.reqMktData(tickerId, contract, "", False, False, [])
+        # ib_app.reqHistoricalData(ib_app.nextOrderId, contract, endDateTime="",
+        #                          durationStr="10 D", barSizeSetting="1 min", whatToShow="TRADES", useRTH=1,
+        #                          formatDate=1, keepUpToDate=True, chartOptions=[])
+        ib_app.reqHistoricalData(tickerId, contract, endDateTime="",
+                                 durationStr="3 M", barSizeSetting="30 mins", whatToShow="TRADES", useRTH=1,
+                                 formatDate=1, keepUpToDate=True, chartOptions=[])
 
-    # queryTime = (dt.datetime.today() - dt.timedelta(days=180)).strftime("%Y%m%d %H:%M:%S")
-    # ib_app.reqHistoricalData(ib_app.nextOrderId, contract, queryTime,"1 M", "1 day", "MIDPOINT", 1, 1, False, [])
-# ====================== Main ======================
-# debug
-trigger_flag = True;
+        # queryTime = (dt.datetime.today() - dt.timedelta(days=180)).strftime("%Y%m%d %H:%M:%S")
+        # ib_app.reqHistoricalData(ib_app.nextOrderId, contract, queryTime,"1 M", "1 day", "MIDPOINT", 1, 1, False, [])
 
-# get current funds available
-ib_app.reqAccountUpdates(True, IB_ACCOUNT_NUMBER)
+    while last_historical_reqId < tickerId:
+        time.sleep(10)
+print("Done - Historical data")
+# init available cash
+available_funds = Funds()
+get_available_funds()
 
-# get current stock positions
+# subscribe to get current stock positions + updates
 stock_positions_columns = ['Symbol', 'SecType', 'Currency', 'Position', 'Avg_cost']
 stock_positions_df = pd.DataFrame(columns=stock_positions_columns)
 initial_position_update_done = False
 ib_app.reqPositions()
 while not initial_position_update_done:
     time.sleep(5)
+print("Done - Position update")
 stock_positions_df.set_index('Symbol', inplace=True)
 
-while True:
-    for tickerId, row in tickers_df.iterrows():  # retrieve new tickers to buy
-        ticker_df = historical_data_df[historical_data_df['Symbol'] == row.ticker]
-        triggers_df = get_triggers_df(ticker_df,triggers_df)
+print("Done - Init")
+# ==========================================================
+# ========================== Main ==========================
+# ==========================================================
 
-    # check if any unhandled triggers
+# # debug
+# trigger_flag = True;
+
+
+while True:
+    # get triggers for each tracked ticker
+    for tickerId, row in tickers_df.iterrows():
+        ticker_df = historical_data_df[historical_data_df['Symbol'] == row.ticker]
+        # if DEBUG:
+        #     triggers_df = dbg_get_triggers_df(ticker_df, triggers_df)
+        # else:
+        if not ticker_df.empty:
+            triggers_df = get_new_triggers(ticker_df, triggers_df)
+
+
+    # get unhandled triggers
     triggers_df = triggers_df[triggers_df['handled']==False]
     trigger_flag = not triggers_df.empty
     if trigger_flag:
         trigger_flag = False
+        # TODO: Clean up triggers_df and check for restricted triggers
         if (triggers_df is not None) and (triggers_df.count()['Symbol'] > 0):  # if there are relevant messages:
-            for ticker in triggers_df.symbol.unique():
+            for ticker in triggers_df.Symbol.unique():
                 # id = a unique number from df to track this ticker's callbacks
                 ticker_id = get_ticker_id(ticker=ticker)
-                # get last price
-                last_price = get_stock_price(ticker=ticker)  # FB stock price = ~240
+                # last_price = get_stock_price(ticker=ticker)  # FB stock price = ~240
+                # debug:
+                last_price = dbg_get_stock_price(ticker=ticker)
+                if math.isnan(last_price):
+                    triggers_df = triggers_df[triggers_df['Symbol']!=ticker]
+                    continue
                 while not (last_price > 0):
                     time.sleep(3)
                     last_price = get_stock_price(ticker=ticker)
+
+                # how much to buy
                 quantity = math.floor(DEFAULT_POSITION_VALUE / last_price)  # 1,000$/240$ = 4 stocks
 
                 # skip restricted tickers
                 if is_restricted(ticker, quantity):
                     # strategy restrictions prevent buying this ticker
-                    # clear_trigger(ticker)
+                    # TODO: clear_trigger(ticker)
                     continue
+
                 # buy stock @ Market price
                 order_id = ib_app.send_order(order_action="BUY", order_type="MKT", quantity=quantity, sec_type="STK",
                                              ticker=ticker)
@@ -539,7 +656,7 @@ while True:
                 # invested_funds -= quantity * exec_price
                 # restrictions = update_restrictions(quantity*exec_price)
 
-            # clear trigger dataframe after all is handled
+            # delete all rows in triggers df after all is handled
             triggers_df.drop(triggers_df.index, inplace=True)
 
     # for position in ib.get_open_positions():  # for each open position:
